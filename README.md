@@ -8,6 +8,11 @@ GridFlock uses [Gridfinity Rebuilt](https://github.com/kennetek/gridfinity-rebui
 
 For inserting magnets, check out [the jig I designed](https://www.printables.com/model/1515309-magnet-insertion-jig-for-gridfinity-gridplates) for GridPlates. It is also compatible with GridFlock.
 
+<img width="2822" height="1069" alt="gridflock-whole" src="https://github.com/user-attachments/assets/0dd6979f-72bd-4a13-b4b9-4bd262ede99d" />
+
+<img width="2822" height="1069" alt="gridflock-closeup" src="https://github.com/user-attachments/assets/af6afa62-9183-45a5-9fda-9f630059736a" />
+
+
 ## Building
 
 The source file cannot be immediately opened in OpenScad. There is a dependency on Gridfinity Rebuilt, and some polygons are loaded from SVG files.
