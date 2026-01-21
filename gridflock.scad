@@ -458,7 +458,7 @@ module segment(count=[1, 1], padding=[0, 0, 0, 0], connector=[false, false, fals
         BASEPLATE_DIMENSIONS.x * count.x + padding[_EAST] + padding[_WEST],
         BASEPLATE_DIMENSIONS.y * count.y + padding[_NORTH] + padding[_SOUTH],
     ];
-    _edge_puzzle_height_male = edge_puzzle_height_male_delta - edge_puzzle_height_male_delta;
+    _edge_puzzle_height_male = edge_puzzle_height_female - edge_puzzle_height_male_delta;
     // whether to cut the male edge puzzle connector to make room for the bin in the next cell. For really short connectors this is not necessary, but there's also no good reason to turn this off, so it's not user configurable at the moment
     _edge_puzzle_overlap = true;
     last = last_cell(count);
