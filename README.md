@@ -27,7 +27,7 @@ This mode adds small puzzle-style connectors at cell intersections. This is simi
 The edge puzzle mode uses larger connectors placed at the edges of cells, instead of intersections. This leads to a more accurate fit, but is a bit harder to print, and uses more filament.
 
 * At a segment corner where female connectors are placed on both adjecent sides, the corner could be "cut off" from the rest of the segment. To avoid this, the connector does not use the full height. When *not* using magnets, this can make the connector quite flimsy.
-* To avoid interference with the bucket in the neighbouring cell, the male connector has a cutout identical to the bin in that cell. Again, if there is not enough vertical height (no magnets), this can make the male connector flimsy.
+* To avoid interference with the bin in the neighbouring cell, the male connector has a cutout identical to the bin in that cell. Again, if there is not enough vertical height (no magnets), this can make the male connector flimsy.
 * To make the female connectors more sturdy and easier to print, an extra "bar" is added at the magnet level, on those edges where a female connector is placed (only if magnets are enabled). You can see it in the screenshot. With this bar, it may be viable to make the connector full-height and avoid the overhang.
 * Unlike the intersection mode, the edge puzzle connectors are highly customizable for your circumstances.
 
