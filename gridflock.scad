@@ -15,10 +15,16 @@ plate_corner_radius = 4;
 
 // Whether to enable friction-fit magnets for each grid cell
 magnets = true;
+// Magnet style
+magnet_style = 1; // [0:Glue from top, 1:Press-Fit]
 // Diameter of the magnet slot
 magnet_diameter = 5.9;
 // Height of the magnet slot
 magnet_height = 2.25;
+// Wall above the magnet. Should be small for maximum magnet strength
+magnet_top = 0.5;
+// Floor below the magnet. Not structurally important, should be small to minimize filament use
+magnet_bottom = 0.75;
 
 // Enable the intersection puzzle plate connector. This is similar to GridPlates/GRIPS. Small puzzle connectors are added cell intersections.
 connector_intersection_puzzle = true;
@@ -48,13 +54,14 @@ edge_adjust = [0, 0, 0, 0];
 
 /* [Hidden] */
 
+_MAGNET_GLUE_TOP = 0;
+_MAGNET_PRESS_FIT = 1;
+
 // openscad does not support boolean vectors in the customizer
 do_half = [do_half_x, do_half_y];
 
 $fn=40;
 
-_magnet_top = 0.5;
-_magnet_bottom = 0.75;
 // dimensions of the magnet extraction slot
 _magnet_extraction_dim = [magnet_diameter/2, magnet_diameter/2+2];
 // dimensions of the magnet extraction slot in negative mode. This is used to cut out slots out of the edge puzzle connector. This is a bit smaller to make the edge puzzle connector less frail
@@ -63,8 +70,8 @@ _magnet_extraction_dim_negative = [magnet_diameter/2, magnet_diameter/2];
 // actual height of a gridfinity profile with no extra clearance.
 // gridfinity rebuilt adds extra clearance at the bottom, we cut that out.
 _profile_height = 4.65;
-_magnet_height = _magnet_top + _magnet_bottom + magnet_height;
-_extra_height = magnets ? _magnet_height : 0;
+_magnet_level_height = (magnet_style == _MAGNET_PRESS_FIT ? magnet_top : 0) + magnet_bottom + magnet_height;
+_extra_height = magnets ? _magnet_level_height : 0;
 
 _total_height = _profile_height + _extra_height;
 
@@ -123,7 +130,7 @@ module cell(half=[false, false], connector=[false, false, false, false], positiv
                 translate([0, 0, _profile_height - BASEPLATE_HEIGHT - _extra_height + 0.001]) baseplate_cutter(size, BASEPLATE_HEIGHT + _extra_height);
             }
             if (magnets) {
-                translate([0, 0, -_magnet_height]) linear_extrude(height = _magnet_height) {
+                translate([0, 0, -_magnet_level_height]) linear_extrude(height = _magnet_level_height) {
                     if (positive) {
                         each_cell_corner(half) {
                             total_bounds = _magnet_location + magnet_diameter/2 + _magnet_border;
@@ -147,20 +154,22 @@ module cell(half=[false, false], connector=[false, false, false, false], positiv
             }
         }
         if (magnets) {
-            translate([0, 0, -_magnet_height]) each_cell_corner(half) {
+            translate([0, 0, -_magnet_level_height]) each_cell_corner(half) {
                 translate([_magnet_location, _magnet_location]) {
                     rot_slot = half.x == half.y ? -45 : -90;
                     // magnet slot
-                    translate([0, 0, _magnet_bottom]) linear_extrude(magnet_height) {
+                    translate([0, 0, magnet_bottom]) linear_extrude(magnet_height) {
                         circle(magnet_diameter/2);
-                        rotate([0, 0, rot_slot]) translate([-magnet_diameter/2, 0]) square([magnet_diameter, magnet_diameter/2 + _magnet_border]);
+                        if (magnet_style == _MAGNET_PRESS_FIT) rotate([0, 0, rot_slot]) translate([-magnet_diameter/2, 0]) square([magnet_diameter, magnet_diameter/2 + _magnet_border]);
                     }
-                    // magnet extraction slot
-                    rotate([0, 0, rot_slot]) linear_extrude(magnet_height + _magnet_bottom) {
-                        extraction_dim = positive ? _magnet_extraction_dim : _magnet_extraction_dim_negative;
-                        translate([-extraction_dim.x/2, -extraction_dim.y]) square(extraction_dim);
-                        translate([0, -extraction_dim.y]) circle(extraction_dim.x/2);
-                        circle(extraction_dim.x/2);
+                    if (magnet_style == _MAGNET_PRESS_FIT) {
+                        // magnet extraction slot
+                        rotate([0, 0, rot_slot]) linear_extrude(magnet_height + magnet_bottom) {
+                            extraction_dim = positive ? _magnet_extraction_dim : _magnet_extraction_dim_negative;
+                            translate([-extraction_dim.x/2, -extraction_dim.y]) square(extraction_dim);
+                            translate([0, -extraction_dim.y]) circle(extraction_dim.x/2);
+                            circle(extraction_dim.x/2);
+                        }
                     }
                 }
             }
