@@ -20,8 +20,28 @@ magnet_diameter = 5.9;
 // Height of the magnet slot
 magnet_height = 2.25;
 
-// Connector type for connecting the generated segments
-connector_type = 1; // [0:None, 1:Intersection puzzle similar to Gridfinity/GRIPS]
+// Enable the intersection puzzle plate connector. This is similar to GridPlates/GRIPS. Small puzzle connectors are added cell intersections.
+connector_intersection_puzzle = true;
+
+// Enable the edge puzzle plate connector. This connector is a bit cleaner, but is harder to print, especially when magnets are disabled (not enough vertical space). It's also more customizable, so you can tune the fit to your printer.
+connector_edge_puzzle = false;
+
+// Number of puzzle connectors per cell
+edge_puzzle_count = 1;
+// Dimensions of the male puzzle connector (main piece)
+edge_puzzle_dim = [10, 2.5];
+// Dimensions of the male puzzle connector (bridge to plate)
+edge_puzzle_dim_c = [3, 1.2];
+// Clearance of the puzzle connector. The female side is larger than the above dimensions by this amount
+edge_puzzle_gap = 0.15;
+// If magnets are enabled, use the vertical space to add a border to the female puzzle socket, for added stability and better printability
+edge_puzzle_magnet_border = true;
+// Size of the added border
+edge_puzzle_magnet_border_width = 2.5;
+// Height of the edge puzzle connector (female side, male is smaller by edge_puzzle_height_male_delta). You can set this to the full height, but make sure that no pieces of the segment remain unconnected!
+edge_puzzle_height_female = 2.25;
+// Male side of the edge puzzle connector is smaller than the female side by this amount
+edge_puzzle_height_male_delta = 0.25;
 
 // Edge adjustment values (clockwise: north, east, south, west). These values are *added* to the plate size as padding, i.e. the final plate will end up different than configured in plate_size. This allows you to customize the padding to be asymmetrical. You can also use negative values to "cut" the plate edges if you want to squeeze an extra square out of limited space.
 edge_adjust = [0, 0, 0, 0];
@@ -35,7 +55,10 @@ $fn=40;
 
 _magnet_top = 0.5;
 _magnet_bottom = 0.75;
+// dimensions of the magnet extraction slot
 _magnet_extraction_dim = [magnet_diameter/2, magnet_diameter/2+2];
+// dimensions of the magnet extraction slot in negative mode. This is used to cut out slots out of the edge puzzle connector. This is a bit smaller to make the edge puzzle connector less frail
+_magnet_extraction_dim_negative = [magnet_diameter/2, magnet_diameter/2];
 
 // actual height of a gridfinity profile with no extra clearance.
 // gridfinity rebuilt adds extra clearance at the bottom, we cut that out.
@@ -57,8 +80,10 @@ _WEST = 3;
 _magnet_location = 0.25 + 2.15 + 0.8 + 4.8;
 _magnet_border = 2;
 
-_CONNECTOR_NONE = 0;
-_CONNECTOR_INTERSECTION_PUZZLE = 1;
+// Distance between edge connector pieces, if multiple configured
+_edge_puzzle_stagger = edge_puzzle_dim.x + 2;
+// Which edges have male connectors?
+_edge_puzzle_direction_male = [true, true, false, false];
 
 /**
  * @Summary Run some code in each corner, with proper rotation, to add magnets
@@ -87,21 +112,36 @@ module each_cell_corner(half=[false, false]) {
 /**
  * @Summary Draw a grid cell centered on 0,0
  * @param half Whether this is a half cell, for each direction
+ * @param positive This flag is false when this cell is used for cutting instead of additively. When cutting, we can simplify the geometry in ways that would waste filament for additive mode
  */
-module cell(half=[false, false]) {
+module cell(half=[false, false], connector=[false, false, false, false], positive=true) {
+    size = [BASEPLATE_DIMENSIONS.x/(half.x?2:1), BASEPLATE_DIMENSIONS.y/(half.y?2:1)];
     difference() {
         union() {
             difference() {
-                translate(-[BASEPLATE_DIMENSIONS.x/(half.x?4:2), BASEPLATE_DIMENSIONS.y/(half.y?4:2), _extra_height]) cube([BASEPLATE_DIMENSIONS.x/(half.x?2:1), BASEPLATE_DIMENSIONS.y/(half.y?2:1), _total_height]);
-                translate([0, 0, _profile_height - BASEPLATE_HEIGHT - _extra_height + 0.001]) baseplate_cutter([BASEPLATE_DIMENSIONS.x/(half.x?2:1), BASEPLATE_DIMENSIONS.y/(half.y?2:1)], BASEPLATE_HEIGHT + _extra_height);
+                translate([-size.x/2, -size.y/2, -_extra_height]) cube([size.x, size.y, _total_height]);
+                translate([0, 0, _profile_height - BASEPLATE_HEIGHT - _extra_height + 0.001]) baseplate_cutter(size, BASEPLATE_HEIGHT + _extra_height);
             }
             if (magnets) {
-                translate([0, 0, -_magnet_height]) each_cell_corner(half) {
-                    linear_extrude(height = _magnet_height) {
-                        total_bounds = _magnet_location + magnet_diameter/2 + _magnet_border;
-                        square([_magnet_location, total_bounds]);
-                        square([total_bounds, _magnet_location]);
-                        translate([_magnet_location, _magnet_location]) circle(r=magnet_diameter/2+_magnet_border);
+                translate([0, 0, -_magnet_height]) linear_extrude(height = _magnet_height) {
+                    if (positive) {
+                        each_cell_corner(half) {
+                            total_bounds = _magnet_location + magnet_diameter/2 + _magnet_border;
+                            square([_magnet_location, total_bounds]);
+                            square([total_bounds, _magnet_location]);
+                            translate([_magnet_location, _magnet_location]) circle(r=magnet_diameter/2+_magnet_border);
+                        }
+                        if (connector_edge_puzzle && edge_puzzle_magnet_border) {
+                            bw = edge_puzzle_dim.y + edge_puzzle_dim_c.y + edge_puzzle_magnet_border_width;
+                            translate(-size/2) {
+                                if (connector[_SOUTH] && !_edge_puzzle_direction_male[_SOUTH]) square([size.x, bw]);
+                                if (connector[_WEST] && !_edge_puzzle_direction_male[_WEST]) square([bw, size.y]);
+                            }
+                            if (connector[_NORTH] && !_edge_puzzle_direction_male[_NORTH]) translate([-size.x/2, size.y/2-bw]) square([size.x, bw]);
+                            if (connector[_EAST] && !_edge_puzzle_direction_male[_EAST]) translate([size.x/2-bw, -size.y/2]) square([bw, size.y]);
+                        }
+                    } else {
+                        translate(-BASEPLATE_DIMENSIONS/2) square([BASEPLATE_DIMENSIONS.x, BASEPLATE_DIMENSIONS.y]);
                     }
                 }
             }
@@ -110,14 +150,17 @@ module cell(half=[false, false]) {
             translate([0, 0, -_magnet_height]) each_cell_corner(half) {
                 translate([_magnet_location, _magnet_location]) {
                     rot_slot = half.x == half.y ? -45 : -90;
+                    // magnet slot
                     translate([0, 0, _magnet_bottom]) linear_extrude(magnet_height) {
                         circle(magnet_diameter/2);
                         rotate([0, 0, rot_slot]) translate([-magnet_diameter/2, 0]) square([magnet_diameter, magnet_diameter/2 + _magnet_border]);
                     }
+                    // magnet extraction slot
                     rotate([0, 0, rot_slot]) linear_extrude(magnet_height + _magnet_bottom) {
-                        translate([-_magnet_extraction_dim.x/2, -_magnet_extraction_dim.y]) square(_magnet_extraction_dim);
-                        translate([0, -_magnet_extraction_dim.y]) circle(_magnet_extraction_dim.x/2);
-                        circle(_magnet_extraction_dim.x/2);
+                        extraction_dim = positive ? _magnet_extraction_dim : _magnet_extraction_dim_negative;
+                        translate([-extraction_dim.x/2, -extraction_dim.y]) square(extraction_dim);
+                        translate([0, -extraction_dim.y]) circle(extraction_dim.x/2);
+                        circle(extraction_dim.x/2);
                     }
                 }
             }
@@ -179,16 +222,32 @@ function last_cell(count) =
     [floor(count.x - 0.25), floor(count.y - 0.25)];
 
 /**
+ * @Summary Get the position of a particular cell on one axis (1D)
+ * @param dimension The cell dimension on this axis
+ * @param size The segment size on this axis
+ * @param count The number of cells on this axis
+ * @param padding_start The start padding on this axis
+ * @param index The index of this cell on this axis (may be < 0 or >= size also)
+ */
+function cell_axis_position(dimension, size, count, padding_start, index) =
+    let(
+        half = index == count - 0.5,
+        // if we go outside the count, and we have a half cell, we need to go back half a cell
+        adj = index > count && (count % 1) == 0.5 ? 0.5 : 0
+    ) -size/2 + padding_start + (index + (half ? 0.25 : 0.5) - adj) * dimension;
+
+/**
  * @Summary In the segment coordinate system, translate to the center of a particular cell
  * @param size The size of the segment
  * @param count The number of cells on each axis
  * @param padding The padding of the segment (for each edge)
- * @param index The index of the cell
+ * @param index The index of the cell (can also be negative or >= count)
  */
 module navigate_cell(size, count, padding, index) {
-    halfx = index.x == count.x - 0.5;
-    halfy = index.y == count.y - 0.5;
-    translate([-size.x/2 + padding[_WEST] + (index.x + (halfx ? 0.25 : 0.5)) * BASEPLATE_DIMENSIONS.x, -size.y/2 + padding[_SOUTH] + (index.y + (halfy ? 0.25 : 0.5)) * BASEPLATE_DIMENSIONS.y]) children();
+    translate([
+        cell_axis_position(BASEPLATE_DIMENSIONS.x, size.x, count.x, padding[_WEST], index.x), 
+        cell_axis_position(BASEPLATE_DIMENSIONS.y, size.y, count.y, padding[_SOUTH], index.y)
+    ]) children();
 }
 
 /**
@@ -211,7 +270,23 @@ module navigate_corner(size, count, padding, index, diry, dirx) {
 }
 
 /**
- * @Summary Draw the segment connectors (2D)
+ * @Summary In the segment coordinate system, translate to an edge of a particular cell
+ * @param size The size of the segment
+ * @param count The number of cells on each axis
+ * @param padding The padding of the segment (for each edge)
+ * @param index The index of the cell
+ * @param dir The edge to navigate to (N/E/S/W)
+ */
+module navigate_edge(size, count, padding, index, dir) {
+    half = [index.x == count.x - 0.5, index.y == count.y - 0.5];
+    navigate_cell(size, count, padding, index) translate([
+        (dir == _WEST ? -1 : dir == _EAST ? 1 : 0) * BASEPLATE_DIMENSIONS.x / (half.x ? 4 : 2),
+        (dir == _SOUTH ? -1 : dir == _NORTH ? 1 : 0) * BASEPLATE_DIMENSIONS.y / (half.y ? 4 : 2)
+    ]) children();
+}
+
+/**
+ * @Summary Draw the segment intersection connectors (2D)
  * @Details Draw all the segment connectors in 2D, once for the whole segment. 
  *          This is done in two passes (negative and positive): The negative
  *          pass cuts out room from the plate, and the positive pass adds the 
@@ -222,64 +297,137 @@ module navigate_corner(size, count, padding, index, diry, dirx) {
  * @param padding The padding of the segment (for each edge)
  * @param connector The connector configuration (for each edge)
  */
-module segment_connectors(positive, count, size, padding, connector) {
-    if (connector_type == _CONNECTOR_INTERSECTION_PUZZLE) {
-        // for the normal case, we iterate over the cells at the edge of the segment, and add two half-connectors for each cell.
-        last = last_cell(count);
-        for (ix = [0:1:last.x]) {
-            // north and south connectors
-            skip_first = ix == 0 && connector[_WEST];
-            skip_last = ix == last.x && connector[_EAST];
-            if (connector[_SOUTH]) {
-                if (!skip_first) navigate_corner(size, count, padding, [ix, 0], _SOUTH, _WEST) mirror([1, 0]) rotate([0, 0, -90]) puzzle_female(positive);
-                if (!skip_last) navigate_corner(size, count, padding, [ix, 0], _SOUTH, _EAST) rotate([0, 0, -90]) puzzle_female(positive);
-            }
-            if (connector[_NORTH]) {
-                if (!skip_first) navigate_corner(size, count, padding, [ix, last.y], _NORTH, _WEST) rotate([0, 0, 90]) puzzle_male(positive);
-                if (!skip_last) navigate_corner(size, count, padding, [ix, last.y], _NORTH, _EAST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive);
-            }
+module segment_intersection_connectors(positive, count, size, padding, connector) {
+    last = last_cell(count);
+    // for the normal case, we iterate over the cells at the edge of the segment, and add two half-connectors for each cell.
+    for (ix = [0:1:last.x]) {
+        // north and south connectors
+        skip_first = ix == 0 && connector[_WEST];
+        skip_last = ix == last.x && connector[_EAST];
+        if (connector[_SOUTH]) {
+            if (!skip_first) navigate_corner(size, count, padding, [ix, 0], _SOUTH, _WEST) mirror([1, 0]) rotate([0, 0, -90]) puzzle_female(positive);
+            if (!skip_last) navigate_corner(size, count, padding, [ix, 0], _SOUTH, _EAST) rotate([0, 0, -90]) puzzle_female(positive);
         }
-        for (iy = [0:1:last.y]) {
-            // east and west connectors
-            halfy = iy == count.y - 0.5;
-            if (connector[_WEST]) {
-                navigate_corner(size, count, padding, [0, iy], _SOUTH, _WEST) rotate([0, 0, 180]) puzzle_female(positive);
-                navigate_corner(size, count, padding, [0, iy], _NORTH, _WEST) mirror([0, 1]) rotate([0, 0, 180]) puzzle_female(positive);
-            }
-            if (connector[_EAST]) {
-                navigate_corner(size, count, padding, [last.x, iy], _SOUTH, _EAST) mirror([0, 1]) puzzle_male(positive);
-                navigate_corner(size, count, padding, [last.x, iy], _NORTH, _EAST) puzzle_male(positive);
-            }
+        if (connector[_NORTH]) {
+            if (!skip_first) navigate_corner(size, count, padding, [ix, last.y], _NORTH, _WEST) rotate([0, 0, 90]) puzzle_male(positive);
+            if (!skip_last) navigate_corner(size, count, padding, [ix, last.y], _NORTH, _EAST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive);
         }
-        // At the corners of the segment, we now only have half-connectors. But if we have padding, there may be space for a full connector after all.
-        // We add half-connectors at the corners and cut them to fit the plate.
-        intersection() {
-            translate([-size.x/2, -size.y/2 - 20]) square([size.x, size.y + 40]);
-            union() {
-                if (!connector[_WEST]) {
-                    if (connector[_SOUTH]) navigate_corner(size, count, padding, [0, 0], _SOUTH, _WEST) rotate([0, 0, -90]) puzzle_female(positive);
-                    if (connector[_NORTH]) navigate_corner(size, count, padding, [0, last.y], _NORTH, _WEST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive);
-                }
-                if (!connector[_EAST]) {
-                    if (connector[_SOUTH]) navigate_corner(size, count, padding, [last.x, 0], _SOUTH, _EAST) mirror([1, 0]) rotate([0, 0, -90]) puzzle_female(positive);
-                    if (connector[_NORTH]) navigate_corner(size, count, padding, [last.x, last.y], _NORTH, _EAST) rotate([0, 0, 90]) puzzle_male(positive);
-                }
-            }
+    }
+    for (iy = [0:1:last.y]) {
+        // east and west connectors
+        halfy = iy == count.y - 0.5;
+        if (connector[_WEST]) {
+            navigate_corner(size, count, padding, [0, iy], _SOUTH, _WEST) rotate([0, 0, 180]) puzzle_female(positive);
+            navigate_corner(size, count, padding, [0, iy], _NORTH, _WEST) mirror([0, 1]) rotate([0, 0, 180]) puzzle_female(positive);
         }
-        intersection() {
-            translate([-size.x/2 - 20, -size.y/2]) square([size.x + 40, size.y]);
-            union() {
-                if (!connector[_SOUTH]) {
-                    if (connector[_WEST]) navigate_corner(size, count, padding, [0, 0], _SOUTH, _WEST) mirror([0, 1]) rotate([0, 0, 180]) puzzle_female(positive);
-                    if (connector[_EAST]) navigate_corner(size, count, padding, [last.x, 0], _SOUTH, _EAST) puzzle_male(positive);
-                }
-                if (!connector[_NORTH]) {
-                    if (connector[_WEST]) navigate_corner(size, count, padding, [0, last.y], _NORTH, _WEST) rotate([0, 0, 180]) puzzle_female(positive);
-                    if (connector[_EAST]) navigate_corner(size, count, padding, [last.x, last.y], _NORTH, _EAST) mirror([0, 1]) puzzle_male(positive);
-                }
+        if (connector[_EAST]) {
+            navigate_corner(size, count, padding, [last.x, iy], _SOUTH, _EAST) mirror([0, 1]) puzzle_male(positive);
+            navigate_corner(size, count, padding, [last.x, iy], _NORTH, _EAST) puzzle_male(positive);
+        }
+    }
+    // At the corners of the segment, we now only have half-connectors. But if we have padding, there may be space for a full connector after all.
+    // We add half-connectors at the corners and cut them to fit the plate.
+    intersection() {
+        translate([-size.x/2, -size.y/2 - 20]) square([size.x, size.y + 40]);
+        union() {
+            if (!connector[_WEST]) {
+                if (connector[_SOUTH]) navigate_corner(size, count, padding, [0, 0], _SOUTH, _WEST) rotate([0, 0, -90]) puzzle_female(positive);
+                if (connector[_NORTH]) navigate_corner(size, count, padding, [0, last.y], _NORTH, _WEST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive);
+            }
+            if (!connector[_EAST]) {
+                if (connector[_SOUTH]) navigate_corner(size, count, padding, [last.x, 0], _SOUTH, _EAST) mirror([1, 0]) rotate([0, 0, -90]) puzzle_female(positive);
+                if (connector[_NORTH]) navigate_corner(size, count, padding, [last.x, last.y], _NORTH, _EAST) rotate([0, 0, 90]) puzzle_male(positive);
             }
         }
     }
+    intersection() {
+        translate([-size.x/2 - 20, -size.y/2]) square([size.x + 40, size.y]);
+        union() {
+            if (!connector[_SOUTH]) {
+                if (connector[_WEST]) navigate_corner(size, count, padding, [0, 0], _SOUTH, _WEST) mirror([0, 1]) rotate([0, 0, 180]) puzzle_female(positive);
+                if (connector[_EAST]) navigate_corner(size, count, padding, [last.x, 0], _SOUTH, _EAST) puzzle_male(positive);
+            }
+            if (!connector[_NORTH]) {
+                if (connector[_WEST]) navigate_corner(size, count, padding, [0, last.y], _NORTH, _WEST) rotate([0, 0, 180]) puzzle_female(positive);
+                if (connector[_EAST]) navigate_corner(size, count, padding, [last.x, last.y], _NORTH, _EAST) mirror([0, 1]) puzzle_male(positive);
+            }
+        }
+    }
+}
+
+/**
+ * @Summary Draw the segment edge connectors (2D)
+ * @Details Draw all the segment connectors in 2D, once for the whole segment. 
+ *          This is done in two passes (negative and positive): The negative
+ *          pass cuts out room from the plate, and the positive pass adds the 
+            tabs.
+ * @param positive true if this is the positive pass
+ * @param count The number of cells on each axis
+ * @param size The size of the segment (incl. padding)
+ * @param padding The padding of the segment (for each edge)
+ * @param connector The connector configuration (for each edge)
+ */
+module segment_edge_connectors(positive, count, size, padding, connector) {
+    last = last_cell(count);
+    for (ix = [0:1:last.x]) {
+        half = ix == count.x - 0.5;
+        if (connector[_SOUTH]) navigate_edge(size, count, padding, [ix, 0], _SOUTH) edge_puzzle(positive, _edge_puzzle_direction_male[_SOUTH], half);
+        if (connector[_NORTH]) navigate_edge(size, count, padding, [ix, last.y], _NORTH) mirror([0, 1]) edge_puzzle(positive, _edge_puzzle_direction_male[_NORTH], half);
+    }
+    for (iy = [0:1:last.y]) {
+        half = iy == count.y - 0.5;
+        if (connector[_WEST]) navigate_edge(size, count, padding, [0, iy], _WEST) mirror([1, 0]) rotate([0, 0, 90]) edge_puzzle(positive, _edge_puzzle_direction_male[_WEST], half);
+        if (connector[_EAST]) navigate_edge(size, count, padding, [last.x, iy], _EAST) rotate([0, 0, 90]) edge_puzzle(positive, _edge_puzzle_direction_male[_EAST], half);
+    }
+}
+
+/**
+ * @Summary Draw a rounded bar
+ * @Details This is a rectangle that is rounded at the start and end of the x direction. The full bar fits into the given size
+ * @param size The bounds of the bar
+ */
+module round_bar_x(size) {
+    translate([size.y/2, 0]) square([size.x - size.y, size.y]);
+    translate([size.y/2, size.y/2]) circle(size.y/2);
+    translate([size.x-size.y/2, size.y/2]) circle(size.y/2);
+}
+
+/**
+ * @Summary Draw a negative rounded bar
+ * @Details This is a rectangle that is *negatively* rounded (i.e. circles cut out) at the start and end of the x direction. The full bar fits into the given size
+ * @param size The bounds of the bar
+ */
+module round_bar_x_neg(size) {
+    difference() {
+        translate([-size.y/2, 0]) square([size.x + size.y, size.y]);
+        translate([-size.y/2, size.y/2]) circle(size.y/2);
+        translate([size.x+size.y/2, size.y/2]) circle(size.y/2);
+    }
+}
+
+/**
+ * @Summary Draw the edge puzzle connector for a single cell side (2D)
+ * @Details This function operates as if on the south edge: The male side extends into the south direction, the female goes into the north direction. For other orientations, rotate/mirror as needed
+ * @param positive Whether this is the positive pass of the edge puzzle drawing
+ * @param male Whether this side has a male connector
+ * @param half Whether this edge is half size
+ */
+module edge_puzzle(positive, male, half) {
+    count_here = half ? max(1, floor(edge_puzzle_count/2)) : edge_puzzle_count;
+    for (i = [0:1:count_here-1]) translate([(-(count_here-1)/2+i)*_edge_puzzle_stagger, 0]) {
+        if (male) {
+            if (positive) {
+                translate([-edge_puzzle_dim_c.x/2, -edge_puzzle_dim_c.y]) round_bar_x_neg([edge_puzzle_dim_c.x, edge_puzzle_dim_c.y]);
+                translate([-edge_puzzle_dim.x/2, -edge_puzzle_dim_c.y-edge_puzzle_dim.y]) round_bar_x([edge_puzzle_dim.x, edge_puzzle_dim.y]);
+            }
+        } else {
+            if (!positive) {
+                translate([-edge_puzzle_dim_c.x/2-edge_puzzle_gap, 0]) round_bar_x_neg([edge_puzzle_dim_c.x+edge_puzzle_gap*2, edge_puzzle_dim_c.y-edge_puzzle_gap]);
+                translate([-edge_puzzle_dim.x/2-edge_puzzle_gap, edge_puzzle_dim_c.y-edge_puzzle_gap]) round_bar_x([edge_puzzle_dim.x+edge_puzzle_gap, edge_puzzle_dim.y+edge_puzzle_gap]);
+            }
+        }
+    }
+    //translate([-0.5,0]) square([1, 15]); // for visually checking alignment
 }
 
 /**
@@ -310,16 +458,27 @@ module segment(count=[1, 1], padding=[0, 0, 0, 0], connector=[false, false, fals
         BASEPLATE_DIMENSIONS.x * count.x + padding[_EAST] + padding[_WEST],
         BASEPLATE_DIMENSIONS.y * count.y + padding[_NORTH] + padding[_SOUTH],
     ];
+    _edge_puzzle_height_male = edge_puzzle_height_male_delta - edge_puzzle_height_male_delta;
+    // whether to cut the male edge puzzle connector to make room for the bin in the next cell. For really short connectors this is not necessary, but there's also no good reason to turn this off, so it's not user configurable at the moment
+    _edge_puzzle_overlap = true;
+    last = last_cell(count);
     intersection() {
-        translate([0, 0, -_extra_height]) linear_extrude(height = _total_height) difference() {
-            // basic plate with rounded corners
-            hull() {
-                translate([-size.x/2+plate_corner_radius, -size.y/2+plate_corner_radius]) segment_corner(_SOUTH, _WEST, connector);
-                translate([size.x/2-plate_corner_radius, -size.y/2+plate_corner_radius]) segment_corner(_SOUTH, _EAST, connector);
-                translate([size.x/2-plate_corner_radius, size.y/2-plate_corner_radius]) segment_corner(_NORTH, _EAST, connector);
-                translate([-size.x/2+plate_corner_radius, size.y/2-plate_corner_radius]) segment_corner(_NORTH, _WEST, connector);
-            };
-            segment_connectors(false, count, size, padding, connector);
+        difference() {
+            translate([0, 0, -_extra_height]) linear_extrude(height = _total_height) difference() {
+                // basic plate with rounded corners
+                hull() {
+                    translate([-size.x/2+plate_corner_radius, -size.y/2+plate_corner_radius]) segment_corner(_SOUTH, _WEST, connector);
+                    translate([size.x/2-plate_corner_radius, -size.y/2+plate_corner_radius]) segment_corner(_SOUTH, _EAST, connector);
+                    translate([size.x/2-plate_corner_radius, size.y/2-plate_corner_radius]) segment_corner(_NORTH, _EAST, connector);
+                    translate([-size.x/2+plate_corner_radius, size.y/2-plate_corner_radius]) segment_corner(_NORTH, _WEST, connector);
+                };
+                if (connector_intersection_puzzle) {
+                    segment_intersection_connectors(false, count, size, padding, connector);
+                }
+            }
+            if (connector_edge_puzzle) {
+                translate([0, 0, -_extra_height]) linear_extrude(height = _extra_height+edge_puzzle_height_female) segment_edge_connectors(false, count, size, padding, connector);
+            }
         }
         union() {
             // padding cubes
@@ -330,13 +489,33 @@ module segment(count=[1, 1], padding=[0, 0, 0, 0], connector=[false, false, fals
                 if (padding[_WEST] > 0) translate([-size.x/2, -size.y/2]) cube([padding[_WEST], size.y, _total_height]);
             }
             // cells
-            last = last_cell(count);
             for (ix = [0:1:last.x]) for (iy = [0:1:last.y]) navigate_cell(size, count, padding, [ix, iy]) {
-                cell([ix == count.x - 0.5, iy == count.y - 0.5]);
+                cell([ix == count.x - 0.5, iy == count.y - 0.5], [
+                    connector[_NORTH] && iy == last.y,
+                    connector[_EAST] && ix == last.x,
+                    connector[_SOUTH] && iy == 0,
+                    connector[_WEST] && ix == 0
+                ]);
             };
         };
     };
-    translate([0, 0, -_extra_height]) linear_extrude(height = _total_height) segment_connectors(true, count, size, padding, connector);
+    
+    if (connector_intersection_puzzle) translate([0, 0, -_extra_height]) linear_extrude(height = _total_height) segment_intersection_connectors(true, count, size, padding, connector);
+    if (connector_edge_puzzle) {
+        intersection() {
+            translate([0, 0, -_extra_height]) linear_extrude(height = _extra_height+_edge_puzzle_height_male) segment_edge_connectors(true, count, size, padding, connector);
+            if (_edge_puzzle_overlap) union() {
+                for (ix = [0:1:last.x]) {
+                    if (connector[_SOUTH]) navigate_cell(size, count, padding, [ix, -1]) cell([ix == count.x - 0.5, false], positive=false);
+                    if (connector[_NORTH]) navigate_cell(size, count, padding, [ix, last.y+1]) cell([ix == count.x - 0.5, false], positive=false);
+                }
+                for (iy = [0:1:last.y]) {
+                    if (connector[_WEST]) navigate_cell(size, count, padding, [-1, iy]) cell([false, iy == count.y - 0.5], positive=false);
+                    if (connector[_EAST]) navigate_cell(size, count, padding, [last.x+1, iy]) cell([false, iy == count.y - 0.5], positive=false);
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -416,14 +595,14 @@ module main() {
         plate_size.x - plate_count.x * BASEPLATE_DIMENSIONS.x,
         plate_size.y - plate_count.y * BASEPLATE_DIMENSIONS.y
     ];
-    plate_padding = [ // TODO: adjustable
+    plate_padding = [
         plate_padding_sum.y / 2, // NORTH
         plate_padding_sum.x / 2, // EAST
         plate_padding_sum.y / 2, // SOUTH
         plate_padding_sum.x / 2, // WEST
     ] + edge_adjust;
     // keep some margin on the edge of the bed clear for the connectors
-    connector_margin = connector_type == _CONNECTOR_INTERSECTION_PUZZLE ? 3.5 : 0;
+    connector_margin = max(connector_intersection_puzzle ? 3.5 : 0, connector_edge_puzzle ? edge_puzzle_dim_c.y + edge_puzzle_dim.y : 0);
     // for the x axis, we only need a single plan, so we can use the ideal algorithm.
     plan_x = plan_axis_ideal(axis_norm=plate_count.x, bed_norm=(bed_size.x - connector_margin)/BASEPLATE_DIMENSIONS.x, start_padding_norm=plate_padding[_WEST]/BASEPLATE_DIMENSIONS.x, end_padding_norm=plate_padding[_EAST]/BASEPLATE_DIMENSIONS.x);
     // for the y axis, we need to avoid 4-way gap intersections, so we need two plans.
