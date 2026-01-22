@@ -644,7 +644,7 @@ module main() {
     plan_x = plan_axis_ideal(axis_norm=plate_count.x, bed_norm=(bed_size.x - connector_margin)/BASEPLATE_DIMENSIONS.x, start_padding_norm=plate_padding[_WEST]/BASEPLATE_DIMENSIONS.x, end_padding_norm=plate_padding[_EAST]/BASEPLATE_DIMENSIONS.x);
     // for the y axis, we need to avoid 4-way gap intersections, so we need two plans.
     plan_y_1 = plan_axis_incremental(axis_norm=plate_count.y, bed_norm=(bed_size.y - connector_margin)/BASEPLATE_DIMENSIONS.y, start_padding_norm=plate_padding[_SOUTH]/BASEPLATE_DIMENSIONS.y, end_padding_norm=plate_padding[_NORTH]/BASEPLATE_DIMENSIONS.y);
-    plan_y_2 = len(plan_y_1) <= 1 ? plan_y_1 : plan_axis_incremental(axis_norm=plate_count.y, bed_norm=(bed_size.y - connector_margin)/BASEPLATE_DIMENSIONS.y, start_padding_norm=plate_padding[_SOUTH]/BASEPLATE_DIMENSIONS.y, end_padding_norm=plate_padding[_NORTH]/BASEPLATE_DIMENSIONS.y, force_first=plan_y_1[0] - 1);
+    plan_y_2 = len(plan_y_1) <= 1 || plan_y_1[0] <= 1 ? plan_y_1 : plan_axis_incremental(axis_norm=plate_count.y, bed_norm=(bed_size.y - connector_margin)/BASEPLATE_DIMENSIONS.y, start_padding_norm=plate_padding[_SOUTH]/BASEPLATE_DIMENSIONS.y, end_padding_norm=plate_padding[_NORTH]/BASEPLATE_DIMENSIONS.y, force_first=plan_y_1[0] - 1);
     for (segix = [0:len(plan_x) - 1]) {
         plan_y = segix % 2 == 0 ? plan_y_1 : plan_y_2;
         for (segiy = [0:len(plan_y) - 1]) {
