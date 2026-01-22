@@ -5,7 +5,7 @@ include <paths/puzzle.scad>
 // The bed size of the printer, e.g. 250x220 for the Prusa Core One
 bed_size = [250, 220];
 // The size of the grid plate to generate
-plate_size = [780, 265];
+plate_size = [371, 254];
 // If there's not enough space for a full grid cell, squeeze in a half cell (x direction)
 do_half_x = true;
 // If there's not enough space for a full grid cell, squeeze in a half cell (y direction)
@@ -72,6 +72,8 @@ number_squeeze_size = 2;
 plate_corner_radius = 4;
 // Edge adjustment values (clockwise: north, east, south, west). These values are *added* to the plate size as padding, i.e. the final plate will end up different than configured in plate_size. This allows you to customize the padding to be asymmetrical. You can also use negative values to "cut" the plate edges if you want to squeeze an extra square out of limited space.
 edge_adjust = [0, 0, 0, 0];
+// Test patterns
+test_pattern = 0; // [0:None, 1:Half, 2:Padding, 3:Numbering]
 
 /* [Hidden] */
 
@@ -683,7 +685,12 @@ module test_pattern_numbering() {
     translate([-30, -30]) segment(count = [1, 1], connector = [true, true, true, true], global_segment_index = 12);
 }
 
-main();
-//test_pattern_half();
-//test_pattern_padding();
-//test_pattern_numbering();
+if (test_pattern == 0) {
+    main();
+} else if (test_pattern == 1) {
+    test_pattern_half();
+} else if (test_pattern == 2) {
+    test_pattern_padding();
+} else if (test_pattern == 3) {
+    test_pattern_numbering();
+}
