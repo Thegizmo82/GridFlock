@@ -512,7 +512,7 @@ module segment(count=[1, 1], padding=[0, 0, 0, 0], connector=[false, false, fals
             }
             if (numbering && global_segment_index != undef) {
                 squeeze = count.x <= 1;
-                navigate_cell(size, count, padding, [0, 0]) translate([BASEPLATE_DIMENSIONS.x/(count.x == 0.5 ? 4 : 2)-(squeeze?2.95/2:0), -BASEPLATE_DIMENSIONS.y/2+4, -_extra_height]) linear_extrude(number_depth) rotate([0, 0, 90]) text(str(global_segment_index + 1), size = squeeze ? number_squeeze_size : number_size, halign="left", valign = "center", font = number_font);
+                navigate_cell(size, count, padding, [0, 0]) translate([BASEPLATE_DIMENSIONS.x/(count.x == 0.5 ? 4 : 2)-(squeeze?2.95/2:0), -BASEPLATE_DIMENSIONS.y/2+4, -_extra_height]) linear_extrude(number_depth) mirror([0, 1]) rotate([0, 0, 90]) text(str(global_segment_index + 1), size = squeeze ? number_squeeze_size : number_size, halign="right", valign = "center", font = number_font);
             }
         }
         union() {
