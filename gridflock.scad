@@ -53,6 +53,19 @@ edge_puzzle_height_female = 2.25;
 // Male side of the edge puzzle connector is smaller than the female side by this amount
 edge_puzzle_height_male_delta = 0.25;
 
+/* [Numbering] */
+
+// Enable numbering of the segements, embossed in a corner
+numbering = true;
+// Depth of the embossing
+number_depth = 0.5;
+// Font size of the numbers
+number_size = 3;
+// Font
+number_font = "sans-serif";
+// When a segment is very narrow, use this reduced number size. Should rarely be relevant
+number_squeeze_size = 2;
+
 /* [Advanced] */
 
 // Corner radius of the generated plate. The default of 4mm matches the corner radius of the gridfinity cell
@@ -469,8 +482,9 @@ module segment_corner(posy=_NORTH, posx=_WEST, connector=[false, false, false, f
  * @param count The number of cells in this segment, on each axis
  * @param padding The padding, for each side
  * @param connector Whether to add a connector, for each side
+ * @param global_segment_index If applicable, the global index of this segment. This is used to emboss numbering
  */
-module segment(count=[1, 1], padding=[0, 0, 0, 0], connector=[false, false, false, false]) {
+module segment(count=[1, 1], padding=[0, 0, 0, 0], connector=[false, false, false, false], global_segment_index=undef) {
     size = [
         BASEPLATE_DIMENSIONS.x * count.x + padding[_EAST] + padding[_WEST],
         BASEPLATE_DIMENSIONS.y * count.y + padding[_NORTH] + padding[_SOUTH],
@@ -495,6 +509,10 @@ module segment(count=[1, 1], padding=[0, 0, 0, 0], connector=[false, false, fals
             }
             if (connector_edge_puzzle) {
                 translate([0, 0, -_extra_height]) linear_extrude(height = _extra_height+edge_puzzle_height_female) segment_edge_connectors(false, count, size, padding, connector);
+            }
+            if (numbering && global_segment_index != undef) {
+                squeeze = count.x <= 1;
+                navigate_cell(size, count, padding, [0, 0]) translate([BASEPLATE_DIMENSIONS.x/(count.x == 0.5 ? 4 : 2)-(squeeze?2.95/2:0), -BASEPLATE_DIMENSIONS.y/2+4, -_extra_height]) linear_extrude(number_depth) rotate([0, 0, 90]) text(str(global_segment_index + 1), size = squeeze ? number_squeeze_size : number_size, halign="left", valign = "center", font = number_font);
             }
         }
         union() {
@@ -628,6 +646,7 @@ module main() {
     for (segix = [0:len(plan_x) - 1]) {
         plan_y = segix % 2 == 0 ? plan_y_1 : plan_y_2;
         for (segiy = [0:len(plan_y) - 1]) {
+            global_segment_index = segiy + ceil(segix / 2) * len(plan_y_1) + floor(segix / 2) * len(plan_y_2);
             translate([
                 (sum_sub_vector(plan_x, segix) + plan_x[segix]/2) * BASEPLATE_DIMENSIONS.x + segix * _segment_gap + (segix == 0 ? 0 : plate_padding[_WEST]),
                 (sum_sub_vector(plan_y, segiy) + plan_y[segiy]/2) * BASEPLATE_DIMENSIONS.y + segiy * _segment_gap + (segiy == 0 ? 0 : plate_padding[_SOUTH]),
@@ -642,7 +661,7 @@ module main() {
                 segix != len(plan_x) - 1,
                 segiy != 0,
                 segix != 0
-            ]);
+            ], global_segment_index=global_segment_index);
         }
     }
 }
@@ -658,8 +677,13 @@ module test_pattern_half() {
     segment(count = [1.5, 1.5], connector = [true, true, true, true]);
 }
 
-main();
+module test_pattern_numbering() {
+    translate([0, 30]) segment(count = [2, 1], connector = [true, true, true, true], global_segment_index = 11);
+    translate([30, -30]) segment(count = [0.5, 1], connector = [true, true, true, true], global_segment_index = 12);
+    translate([-30, -30]) segment(count = [1, 1], connector = [true, true, true, true], global_segment_index = 12);
+}
+
+//main();
 //test_pattern_half();
 //test_pattern_padding();
-
-
+test_pattern_numbering();
