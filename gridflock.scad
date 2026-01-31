@@ -246,7 +246,7 @@ module cell(half=[false, false], connector=[false, false, false, false], positiv
                     } else {
                         // for negative mode, we don't care about extra geometry
                         // this also runs for _MAGNET_SOLID style
-                        translate(-BASEPLATE_DIMENSIONS/2) square([BASEPLATE_DIMENSIONS.x, BASEPLATE_DIMENSIONS.y]);
+                        translate(-size/2) square(size);
                     }
                 }
             }
@@ -272,7 +272,7 @@ module cell(half=[false, false], connector=[false, false, false, false], positiv
                 }
             }
         }
-        if (thumbscrews) rotate_extrude() {
+        if (thumbscrews && !half.x && !half.y) rotate_extrude() {
             top = magnets && magnet_frame_style != _MAGNET_SOLID ? -_magnet_level_height : 0;
             height = 100;
             polygon([[0, top], [thumbscrew_diameter/2, top], [thumbscrew_diameter/2 + height, top-height], [0, top-height]]);
@@ -561,7 +561,7 @@ module vertical_screw() {
     clear_upwards = 10;
     rotate_extrude() {
         translate([0, -_extra_height]) square([vertical_screw_diameter/2, _total_height + clear_upwards]);
-        translate([0, _profile_height]) polygon([[0, 0], [0, clear_upwards], [vertical_screw_countersink_top.x/2, clear_upwards], [vertical_screw_countersink_top.x/2, 0], [0, -vertical_screw_countersink_top.y]]);
+        translate([0, _profile_height]) polygon([[0, 0], [0, clear_upwards], [vertical_screw_countersink_top.x/2, clear_upwards], [vertical_screw_countersink_top.x/2, 0], [vertical_screw_diameter/2, -vertical_screw_countersink_top.y]]);
     }
 }
 
@@ -873,9 +873,8 @@ module main() {
         plan_y = plans_y[segix % 2];
         for (segiy = [0:len(plan_y) - 1]) {
             translate([
-                (sum_sub_vector(plan_x, segix) + plan_x[segix]/2) * BASEPLATE_DIMENSIONS.x + segix * _segment_gap + (segix == 0 ? 0 : plate_padding[_WEST]),
-                (sum_sub_vector(plan_y, segiy) + plan_y[segiy]/2) * BASEPLATE_DIMENSIONS.y + segiy * _segment_gap + (segiy == 0 ? 0 : plate_padding[_SOUTH]),
-                0
+                (sum_sub_vector(plan_x, segix) + plan_x[segix]/2 - plate_count.x/2) * BASEPLATE_DIMENSIONS.x + (segix - (len(plan_x) - 1)/2) * _segment_gap + (segix == 0 ? -0.5 : 0.5) * plate_padding[_WEST] - plate_padding[_EAST]/2,
+                (sum_sub_vector(plan_y, segiy) + plan_y[segiy]/2 - plate_count.y/2) * BASEPLATE_DIMENSIONS.y + (segiy - (len(plan_y) - 1)/2) * _segment_gap + (segiy == 0 ? -0.5 : 0.5) * plate_padding[_SOUTH] - plate_padding[_NORTH]/2
             ]) segment(count=[plan_x[segix], plan_y[segiy]], padding=[
                 segiy == len(plan_y) - 1 ? plate_padding[_NORTH] : 0,
                 segix == len(plan_x) - 1 ? plate_padding[_EAST] : 0,
