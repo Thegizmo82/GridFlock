@@ -169,6 +169,8 @@ x_segment_algorithm = 0; // [0:Ideal, 1:Incremental]
 y_row_count_first = [0, 0]; 
 // If the 'incremental' x segment algorithm is chosen, this can be used to override the column count in the first segment.
 x_column_count_first = 0;
+// Generate positive edge padding as separate printable pieces instead of attaching it to the outer baseplate segments.
+separate_edge_padding = false;
 
 /* [Stacked Print] */
 
@@ -450,7 +452,7 @@ module puzzle_male_0() {
  * Cleaned polygon for the male puzzle connector. In particular, we need 
  * to cut the parts of the polygon that overlap with the bin.
  */
-module puzzle_male(positive) {
+module puzzle_male(positive, max_depth) {
     difference() {
         if (positive) {
             puzzle_male_0();
@@ -458,6 +460,8 @@ module puzzle_male(positive) {
             hull() puzzle_male_0();
         }
         translate([-4, -4]) circle(4);
+        // if the segment is very narrow (separate_edge_padding) we need to shorten the connector
+        if (max_depth < 4) translate([-4, -4]) square([4 - max_depth, 8]);
     }
 }
 
@@ -670,8 +674,8 @@ module segment_intersection_connectors(positive, trace, size, padding, connector
             if (!skip_last) navigate_corner(size, trace, padding, [ix, 0], _SOUTH, _EAST) rotate([0, 0, -90]) puzzle_female(positive);
         }
         if (connector[_NORTH]) {
-            if (!skip_first) navigate_corner(size, trace, padding, [ix, last.y], _NORTH, _WEST) rotate([0, 0, 90]) puzzle_male(positive);
-            if (!skip_last) navigate_corner(size, trace, padding, [ix, last.y], _NORTH, _EAST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive);
+            if (!skip_first) navigate_corner(size, trace, padding, [ix, last.y], _NORTH, _WEST) rotate([0, 0, 90]) puzzle_male(positive, size.y);
+            if (!skip_last) navigate_corner(size, trace, padding, [ix, last.y], _NORTH, _EAST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive, size.y);
         }
     }
     for (iy = [0:1:last.y]) {
@@ -681,8 +685,8 @@ module segment_intersection_connectors(positive, trace, size, padding, connector
             navigate_corner(size, trace, padding, [0, iy], _NORTH, _WEST) mirror([0, 1]) rotate([0, 0, 180]) puzzle_female(positive);
         }
         if (connector[_EAST]) {
-            navigate_corner(size, trace, padding, [last.x, iy], _SOUTH, _EAST) mirror([0, 1]) puzzle_male(positive);
-            navigate_corner(size, trace, padding, [last.x, iy], _NORTH, _EAST) puzzle_male(positive);
+            navigate_corner(size, trace, padding, [last.x, iy], _SOUTH, _EAST) mirror([0, 1]) puzzle_male(positive, size.x);
+            navigate_corner(size, trace, padding, [last.x, iy], _NORTH, _EAST) puzzle_male(positive, size.x);
         }
     }
     // At the corners of the segment, we now only have half-connectors. But if we have padding, there may be space for a full connector after all.
@@ -698,29 +702,29 @@ module segment_intersection_connectors(positive, trace, size, padding, connector
         size.x/2 - calculate_plate_wall(_EAST),
         size.y/2 - calculate_plate_wall(_NORTH)
     ];
-    intersection() {
+    if (len(trace.x) > 0 || !positive) intersection() {
         translate([bounds_min.x, -size.y/2 - 20]) square([bounds_max.x - bounds_min.x, size.y + 40]);
         union() {
             if (!connector[_WEST]) {
                 if (connector[_SOUTH]) navigate_corner(size, trace, padding, [0, 0], _SOUTH, _WEST) rotate([0, 0, -90]) puzzle_female(positive);
-                if (connector[_NORTH]) navigate_corner(size, trace, padding, [0, last.y], _NORTH, _WEST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive);
+                if (connector[_NORTH]) navigate_corner(size, trace, padding, [0, last.y], _NORTH, _WEST) mirror([1, 0]) rotate([0, 0, 90]) puzzle_male(positive, size.y);
             }
             if (!connector[_EAST]) {
                 if (connector[_SOUTH]) navigate_corner(size, trace, padding, [last.x, 0], _SOUTH, _EAST) mirror([1, 0]) rotate([0, 0, -90]) puzzle_female(positive);
-                if (connector[_NORTH]) navigate_corner(size, trace, padding, [last.x, last.y], _NORTH, _EAST) rotate([0, 0, 90]) puzzle_male(positive);
+                if (connector[_NORTH]) navigate_corner(size, trace, padding, [last.x, last.y], _NORTH, _EAST) rotate([0, 0, 90]) puzzle_male(positive, size.y);
             }
         }
     }
-    intersection() {
+    if (len(trace.y) > 0 || !positive) intersection() {
         translate([-size.x/2 - 20, bounds_min.y]) square([size.x + 40, bounds_max.y - bounds_min.y]);
         union() {
             if (!connector[_SOUTH]) {
                 if (connector[_WEST]) navigate_corner(size, trace, padding, [0, 0], _SOUTH, _WEST) mirror([0, 1]) rotate([0, 0, 180]) puzzle_female(positive);
-                if (connector[_EAST]) navigate_corner(size, trace, padding, [last.x, 0], _SOUTH, _EAST) puzzle_male(positive);
+                if (connector[_EAST]) navigate_corner(size, trace, padding, [last.x, 0], _SOUTH, _EAST) puzzle_male(positive, size.x);
             }
             if (!connector[_NORTH]) {
                 if (connector[_WEST]) navigate_corner(size, trace, padding, [0, last.y], _NORTH, _WEST) rotate([0, 0, 180]) puzzle_female(positive);
-                if (connector[_EAST]) navigate_corner(size, trace, padding, [last.x, last.y], _NORTH, _EAST) mirror([0, 1]) puzzle_male(positive);
+                if (connector[_EAST]) navigate_corner(size, trace, padding, [last.x, last.y], _NORTH, _EAST) mirror([0, 1]) puzzle_male(positive, size.x);
             }
         }
     }
@@ -843,6 +847,16 @@ module segment_corner(posy=_NORTH, posx=_WEST, connector=[false, false, false, f
 }
 
 /**
+ * This is an "inverted" quarter-circle that is used to punch out the corner of a rounded rectangle.
+ */
+module corner_punch() {
+    difference() {
+        square([1, 1]);
+        translate([1, 1]) circle(r=1);
+    }
+}
+
+/**
  * @Summary Draw the 2D shape of a segment, including rounded corners
  * @param size The size of the segment
  * @param connector The connector configuration
@@ -853,7 +867,7 @@ module segment_rectangle(size, connector=[false, false, false, false], include_w
     wall_t = function (side) include_wall || connector[side] ? 0 : plate_wall_thickness[side];
     // corner radius by side
     compute_radius = function (side) max(0.01, plate_corner_radius - wall_t(side));
-    bounds_offset = function (side) compute_radius(side) + wall_t(side);
+    bounds_offset = function (side) wall_t(side);
     bounds_min = [
         -size.x/2 + bounds_offset(_WEST),
         -size.y/2 + bounds_offset(_SOUTH)
@@ -862,12 +876,13 @@ module segment_rectangle(size, connector=[false, false, false, false], include_w
         size.x/2 - bounds_offset(_EAST),
         size.y/2 - bounds_offset(_NORTH)
     ];
-    hull() {
-        translate([bounds_min.x, bounds_min.y]) segment_corner(_SOUTH, _WEST, connector, compute_radius);
-        translate([bounds_max.x, bounds_min.y]) segment_corner(_SOUTH, _EAST, connector, compute_radius);
-        translate([bounds_max.x, bounds_max.y]) segment_corner(_NORTH, _EAST, connector, compute_radius);
-        translate([bounds_min.x, bounds_max.y]) segment_corner(_NORTH, _WEST, connector, compute_radius);
-    };
+    difference() {
+        translate(bounds_min) square([bounds_max.x - bounds_min.x, bounds_max.y - bounds_min.y]);
+        if (!connector[_SOUTH] && !connector[_WEST]) translate(bounds_min) scale([compute_radius(_WEST), compute_radius(_SOUTH)]) corner_punch();
+        if (!connector[_NORTH] && !connector[_WEST]) translate([bounds_min.x, bounds_max.y]) scale([compute_radius(_WEST), compute_radius(_NORTH)]) rotate(-90) corner_punch();
+        if (!connector[_SOUTH] && !connector[_EAST]) translate([bounds_max.x, bounds_min.y]) scale([compute_radius(_EAST), compute_radius(_SOUTH)]) rotate(90) corner_punch();
+        if (!connector[_NORTH] && !connector[_EAST]) translate(bounds_max) scale([compute_radius(_EAST), compute_radius(_NORTH)]) rotate(180) corner_punch();
+    }
 }
 
 module chamfer_triangle() {
@@ -964,8 +979,13 @@ module segment(trace=[[1], [1]], padding=[0, 0, 0, 0], connector=[false, false, 
             translate([0, 0, -_extra_height]) linear_extrude(height = _extra_height+edge_puzzle_height_female) segment_edge_connectors(false, trace, size, padding, connector);
         }
         if (numbering && global_segment_index != undef) {
+            grid_segment = len(trace.x) > 0 && len(trace.y) > 0;
             squeeze = len(trace.x) <= 1;
-            navigate_cell(size, trace, padding, [0, 0]) translate([BASEPLATE_DIMENSIONS.x*trace.x[0]/2-(squeeze?2.95/2:0), -BASEPLATE_DIMENSIONS.y/2+4, -_extra_height]) linear_extrude(number_depth) mirror([0, 1]) rotate([0, 0, 90]) text(str(global_segment_index + 1), size = squeeze ? number_squeeze_size : number_size, halign="right", valign = "center", font = number_font);
+            if (grid_segment) {
+                navigate_cell(size, trace, padding, [0, 0]) translate([BASEPLATE_DIMENSIONS.x*trace.x[0]/2-(squeeze?2.95/2:0), -BASEPLATE_DIMENSIONS.y/2+4, -_extra_height]) linear_extrude(number_depth) mirror([0, 1]) rotate([0, 0, 90]) text(str(global_segment_index + 1), size = squeeze ? number_squeeze_size : number_size, halign="right", valign = "center", font = number_font);
+            } else {
+                translate([0, 0, -_extra_height]) linear_extrude(number_depth) mirror([0, 1]) text(str(global_segment_index + 1), size = number_squeeze_size, halign="center", valign = "center", font = number_font);
+            }
         }
         // extend a bit beyond the segment edges to make sure we cut any overhang
         extend = 10;
@@ -999,6 +1019,9 @@ module segment(trace=[[1], [1]], padding=[0, 0, 0, 0], connector=[false, false, 
     }
 }
 
+function padding_unless_separate(p) = 
+    separate_edge_padding ? min(0, p) : p;
+
 /**
  * @Summary Calculate the minimum number of segments required to print this axis
  * @param trace The cell sizes on this axis
@@ -1025,15 +1048,16 @@ function segments_per_axis(trace, bed_norm, start_padding_norm=0, end_padding_no
 function plan_axis_ideal(trace, bed_norm, start_padding_norm=0, end_padding_norm=0) =
     let(
         cumulated = cumulate(trace),
-        total_size = cumulated[len(trace)] + start_padding_norm + end_padding_norm,
-        segment_count = segments_per_axis(trace, bed_norm, start_padding_norm, end_padding_norm),
+        total_size = cumulated[len(trace)] + padding_unless_separate(start_padding_norm) + padding_unless_separate(end_padding_norm),
+        segment_count = segments_per_axis(trace, bed_norm, padding_unless_separate(start_padding_norm), padding_unless_separate(end_padding_norm)),
         avg_segment_size = total_size / segment_count,
+        segment_count_with_padding = segment_count + (separate_edge_padding && start_padding_norm > 0 ? 1 : 0) + (separate_edge_padding && end_padding_norm > 0 ? 1 : 0),
         // compute which segment each cell is assigned to
         assignments = [for (i = [0:len(trace) - 1]) let (
-            center = cumulated[i] + trace[i] / 2 + start_padding_norm,
+            center = cumulated[i] + trace[i] / 2 + padding_unless_separate(start_padding_norm),
             norm_ix = center / avg_segment_size
-        ) (norm_ix % 1) == 0 ? norm_ix - 1 : floor(norm_ix)]
-    ) [for (i = [0:segment_count - 1]) len(search(i, assignments, num_returns_per_match=0))];
+        ) ((norm_ix % 1) == 0 ? norm_ix - 1 : floor(norm_ix)) + (separate_edge_padding && start_padding_norm > 0 ? 1 : 0)]
+    ) [for (i = [0:segment_count_with_padding - 1]) len(search(i, assignments, num_returns_per_match=0))];
 
 /**
  * @Summary Calculate an incremental axis plan.
@@ -1076,13 +1100,15 @@ function plan_axis_incremental_vars(trace, bed_norm, start_padding_norm=0, end_p
  * @Summary Transform a short plan from plan_axis_incremental_vars into a full plan as returned by plan_axis_ideal
  * @return A vector containing the number of cells in each planned segment
  */
-function vars_to_incremental(trace, vars) = let(
+function vars_to_incremental(trace, vars, start_padding_norm=0, end_padding_norm=0) = let(
         axis_norm = len(trace),
         first = vars[0],
         mid = vars[1],
-        end = vars[2]
-    ) mid == -1 ? [first] : [for(i = 0, pos = 0; pos < axis_norm; i = i + 1, pos = first + mid * (i - 1)) 
-        i == 0 ? first : pos + mid >= axis_norm ? end : mid];
+        end = vars[2],
+        before = separate_edge_padding && start_padding_norm > 0 ? [0] : [],
+        after = separate_edge_padding && end_padding_norm > 0 ? [0] : []
+    ) concat(before, (mid == -1 ? [first] : [for(i = 0, pos = 0; pos < axis_norm; i = i + 1, pos = first + mid * (i - 1)) 
+        i == 0 ? first : pos + mid >= axis_norm ? end : mid]), after);
 
 /**
  * @Summary Score plan_b, assuming plan_a is fixed. Lower value is better
@@ -1120,7 +1146,7 @@ function plan_axis_staggered(trace, bed_norm, start_padding_norm=0, end_padding_
     assert(end_padding_norm != undef)
     let (
         // lambda: call plan_axis_incremental_vars with a specific shift
-        plan_vars = function(force_first) plan_axis_incremental_vars(trace, bed_norm, start_padding_norm, end_padding_norm, force_first),
+        plan_vars = function(force_first) plan_axis_incremental_vars(trace, bed_norm, padding_unless_separate(start_padding_norm), padding_unless_separate(end_padding_norm), force_first),
         // lambda: calculate the number of segments for a given set of plan_axis_incremental_vars
         plan_size = function(vars) vars[1] == -1 ? 1 : (len(trace) - vars[0] - vars[2]) / vars[1] + 2,
         // make a simple plan for the first column
@@ -1129,9 +1155,9 @@ function plan_axis_staggered(trace, bed_norm, start_padding_norm=0, end_padding_
         plan_a2 = plan_a1[1] == -1 || plan_a1[2] >= 2 || plan_a1[0] <= 2 ? plan_a1 : plan_vars(plan_a1[0] - 1)
     )
     // manual override
-    y_row_count_first[1] > 0 ? [vars_to_incremental(trace, plan_a1), vars_to_incremental(trace, plan_vars(y_row_count_first[1]))] :
+    y_row_count_first[1] > 0 ? [vars_to_incremental(trace, plan_a1, start_padding_norm, end_padding_norm), vars_to_incremental(trace, plan_vars(y_row_count_first[1]), start_padding_norm, end_padding_norm)] :
     // shortcut: if we don't need to split at all, or we can't change the split, we don't need to worry about staggering
-    plan_a1[1] <= 1 ? [vars_to_incremental(trace, plan_a1), vars_to_incremental(trace, plan_a1)] : 
+    plan_a1[1] <= 1 ? [vars_to_incremental(trace, plan_a1, start_padding_norm, end_padding_norm), vars_to_incremental(trace, plan_a1, start_padding_norm, end_padding_norm)] : 
     let(
         // now, we determine the optimal shift of the second column.
         // first, plan with a minimum shift as a baseline.
@@ -1148,7 +1174,7 @@ function plan_axis_staggered(trace, bed_norm, start_padding_norm=0, end_padding_
         ) score_plan_b(plan_a2, plan)],
         // pick the shift with the best score
         shift = least_index(plan_b_shift) + 1
-    ) [vars_to_incremental(trace, plan_a2), vars_to_incremental(trace, plan_vars(plan_a2[0] - shift))];
+    ) [vars_to_incremental(trace, plan_a2, start_padding_norm, end_padding_norm), vars_to_incremental(trace, plan_vars(plan_a2[0] - shift), start_padding_norm, end_padding_norm)];
 
 /**
  * @Summary Quicksort the input array
@@ -1230,14 +1256,21 @@ module main() {
     // for the x axis, we only need a single plan, so we can use the ideal algorithm.
     plan_x = x_segment_algorithm == _SEGMENT_ALGORITHM_IDEAL ? 
         plan_axis_ideal(global_trace.x, bed_norm=bed_norm.x, start_padding_norm=start_padding_norm.x, end_padding_norm=end_padding_norm.x) :
-        vars_to_incremental(global_trace.x, plan_axis_incremental_vars(global_trace.x, bed_norm=bed_norm.x, start_padding_norm=start_padding_norm.x, end_padding_norm=end_padding_norm.x, force_first=x_column_count_first == 0 ? undef : x_column_count_first));
+        vars_to_incremental(global_trace.x, plan_axis_incremental_vars(global_trace.x, bed_norm=bed_norm.x, start_padding_norm=start_padding_norm.x, end_padding_norm=end_padding_norm.x, force_first=x_column_count_first == 0 ? undef : x_column_count_first), start_padding_norm.x, end_padding_norm.x);
     // for the y axis, we need to avoid 4-way gap intersections, so we need two plans.
     plans_y = plan_axis_staggered(global_trace.y, bed_norm=bed_norm.y, start_padding_norm=start_padding_norm.y, end_padding_norm=end_padding_norm.y);
     plans_y_cumulate = [for (p = plans_y) cumulate(p)];
     plan_x_cumulate = cumulate(plan_x);
 
-    function get_plan_y(segix) = plans_y[segix % 2];
-    function get_plan_y_cumulate(segix) = plans_y_cumulate[segix % 2];
+    // with separate_edge_padding, the normal plans contain segments with 0x0 cells that we want to avoid. those segments are collapsed into their neighbors here.
+    function collapse_empty(plan) = 
+        [for (seg = plan) if (seg != 0) seg];
+    plans_y_collapsed = [for (p = plans_y) collapse_empty(p)];
+    plans_y_collapsed_cumulate = [for (p = plans_y_collapsed) cumulate(p)];
+
+    function get_plan_y(segix) = 
+        (plan_x[segix] == 0 ? plans_y_collapsed : plans_y)[segix % 2];
+    function get_plan_y_cumulate(segix) = (plan_x[segix] == 0 ? plans_y_collapsed_cumulate : plans_y_cumulate)[segix % 2];
     
     /*
      * @Summary Compute the padding for a particular segment.
