@@ -17,7 +17,7 @@ description-extra-html = """
 <span style="display: none" class="alert alert-warning" data-display-condition="connector_intersection_puzzle && connector_edge_puzzle">You have enabled both the edge and intersection puzzle connectors. While technically possible, it is better to focus on and tune one connector type.</span>
 """
 umami-track-render = []
-umami-track-export = ["magnets", "magnet_style", "connector_intersection_puzzle", "connector_edge_puzzle", "bed_size", "click", "click_style", "filler_x", "filler_y", "stacked_print"]
+umami-track-export = ["magnets", "magnet_style", "connector_intersection_puzzle", "connector_edge_puzzle", "bed_size", "click", "click_style", "filler_x", "filler_y", "stacked_print", "adapter_mode"]
 
 [model.param-metadata.bed_size.presets]
 text = "Printer Presets"
@@ -152,6 +152,21 @@ collapsed = true
 help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#plate-wall"
 [model.param-metadata.plate_wall_height]
 help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#plate-wall"
+
+[model.tab-metadata.openGrid]
+help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#opengrid-adapter"
+collapsed = true
+[model.param-metadata.adapter_north]
+help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#opengrid-adapter"
+[model.param-metadata.adapter_east]
+help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#opengrid-adapter"
+[model.param-metadata.adapter_south]
+help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#opengrid-adapter"
+[model.param-metadata.adapter_west]
+help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#opengrid-adapter"
+[model.param-metadata.adapter_mode]
+help-link = "https://github.com/yawkat/GridFlock/blob/main/README.md#adapter-types"
+display-condition = {js = "adapter_north || adapter_east || adapter_south || adapter_west"}
 
 [model.tab-metadata."Vertical Screws"]
 collapsed = true
